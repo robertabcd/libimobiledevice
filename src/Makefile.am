@@ -7,6 +7,7 @@ lib_LTLIBRARIES = libimobiledevice.la
 libimobiledevice_la_LIBADD = $(top_builddir)/common/libinternalcommon.la
 libimobiledevice_la_LDFLAGS = $(AM_LDFLAGS) -version-info $(LIBIMOBILEDEVICE_SO_VERSION) -no-undefined
 libimobiledevice_la_SOURCES = idevice.c idevice.h \
+		       idevice_usbmux.c\
 		       service.c service.h\
 		       property_list_service.c property_list_service.h\
 		       device_link_service.c device_link_service.h\

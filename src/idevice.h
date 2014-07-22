@@ -41,6 +41,22 @@ enum connection_type {
 	CONNECTION_USBMUXD = 1
 };
 
+struct idevice_proto {
+	idevice_error_t (*connect)(idevice_t device, uint16_t port, idevice_connection_t *connection);
+	idevice_error_t (*free)(idevice_t device);
+	idevice_error_t (*get_handle)(idevice_t device, uint32_t *handle);
+	idevice_error_t (*get_udid)(idevice_t device, char **udid);
+};
+
+struct idevice_connection_proto {
+	idevice_error_t (*disconnect)(idevice_connection_t connection);
+	idevice_error_t (*send)(idevice_connection_t connection, const char *data, uint32_t len, uint32_t *sent_bytes);
+	idevice_error_t (*receive_timeout)(idevice_connection_t connection, char *data, uint32_t len, uint32_t *recv_bytes, unsigned int timeout);
+	idevice_error_t (*receive)(idevice_connection_t connection, char *data, uint32_t len, uint32_t *recv_bytes);
+	int (*get_fd)(idevice_connection_t connection);
+};
+
+
 struct ssl_data_private {
 #ifdef HAVE_OPENSSL
 	SSL *session;
@@ -58,15 +74,14 @@ typedef struct ssl_data_private *ssl_data_t;
 
 struct idevice_connection_private {
 	char *udid;
-	enum connection_type type;
+	struct idevice_connection_proto *proto;
 	void *data;
 	ssl_data_t ssl_data;
 };
 
 struct idevice_private {
-	char *udid;
-	enum connection_type conn_type;
-	void *conn_data;
+	struct idevice_proto *proto;
+	void *data;
 };
 
 #endif

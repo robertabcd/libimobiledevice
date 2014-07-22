@@ -133,6 +133,12 @@ idevice_error_t idevice_device_list_free(char **devices);
  *
  * @return IDEVICE_E_SUCCESS if ok, otherwise an error code.
  */
+idevice_error_t idevice_usbmux_new(idevice_t *device, const char *udid);
+
+/**
+ * Same as idevice_usbmux_new.
+ * This is for backward compatibility, and should not be used in newer code.
+ */
 idevice_error_t idevice_new(idevice_t *device, const char *udid);
 
 /**

@@ -209,65 +209,28 @@ idevice_error_t idevice_device_list_free(char **devices)
 
 idevice_error_t idevice_new(idevice_t * device, const char *udid)
 {
-	usbmuxd_device_info_t muxdev;
-	int res = usbmuxd_get_device_by_udid(udid, &muxdev);
-	if (res > 0) {
-		idevice_t dev = (idevice_t) malloc(sizeof(struct idevice_private));
-		dev->udid = strdup(muxdev.udid);
-		dev->conn_type = CONNECTION_USBMUXD;
-		dev->conn_data = (void*)(long)muxdev.handle;
-		*device = dev;
-		return IDEVICE_E_SUCCESS;
-	}
-	/* other connection types could follow here */
-
-	return IDEVICE_E_NO_DEVICE;
+	return idevice_usbmux_new(device, udid);
 }
 
 idevice_error_t idevice_free(idevice_t device)
 {
 	if (!device)
 		return IDEVICE_E_INVALID_ARG;
-	idevice_error_t ret = IDEVICE_E_UNKNOWN_ERROR;
 
-	ret = IDEVICE_E_SUCCESS;
+	idevice_error_t result = device->proto->free(device);
+	if (result != IDEVICE_E_SUCCESS)
+		return result;
 
-	free(device->udid);
-
-	if (device->conn_type == CONNECTION_USBMUXD) {
-		device->conn_data = 0;
-	}
-	if (device->conn_data) {
-		free(device->conn_data);
-	}
 	free(device);
-	return ret;
+	return IDEVICE_E_SUCCESS;
 }
 
 idevice_error_t idevice_connect(idevice_t device, uint16_t port, idevice_connection_t *connection)
 {
-	if (!device) {
+	if (!device)
 		return IDEVICE_E_INVALID_ARG;
-	}
 
-	if (device->conn_type == CONNECTION_USBMUXD) {
-		int sfd = usbmuxd_connect((uint32_t)(long)device->conn_data, port);
-		if (sfd < 0) {
-			debug_info("ERROR: Connecting to usbmuxd failed: %d (%s)", sfd, strerror(-sfd));
-			return IDEVICE_E_UNKNOWN_ERROR;
-		}
-		idevice_connection_t new_connection = (idevice_connection_t)malloc(sizeof(struct idevice_connection_private));
-		new_connection->type = CONNECTION_USBMUXD;
-		new_connection->data = (void*)(long)sfd;
-		new_connection->ssl_data = NULL;
-		idevice_get_udid(device, &new_connection->udid);
-		*connection = new_connection;
-		return IDEVICE_E_SUCCESS;
-	} else {
-		debug_info("Unknown connection type %d", device->conn_type);
-	}
-
-	return IDEVICE_E_UNKNOWN_ERROR;
+	return device->proto->connect(device, port, connection);
 }
 
 idevice_error_t idevice_disconnect(idevice_connection_t connection)
@@ -279,22 +242,21 @@ idevice_error_t idevice_disconnect(idevice_connection_t connection)
 	if (connection->ssl_data) {
 		idevice_connection_disable_ssl(connection);
 	}
-	idevice_error_t result = IDEVICE_E_UNKNOWN_ERROR;
-	if (connection->type == CONNECTION_USBMUXD) {
-		usbmuxd_disconnect((int)(long)connection->data);
+
+	idevice_error_t result = connection->proto->disconnect(connection);
+	if (result != IDEVICE_E_SUCCESS)
+		return result;
+
+	if (connection->data) {
+		free(connection->data);
 		connection->data = NULL;
-		result = IDEVICE_E_SUCCESS;
-	} else {
-		debug_info("Unknown connection type %d", connection->type);
 	}
-
-	if (connection->udid)
+	if (connection->udid) {
 		free(connection->udid);
-
+		connection->udid = NULL;
+	}
 	free(connection);
-	connection = NULL;
-
-	return result;
+	return IDEVICE_E_SUCCESS;
 }
 
 /**
@@ -305,19 +267,7 @@ static idevice_error_t internal_connection_send(idevice_connection_t connection,
 	if (!connection || !data) {
 		return IDEVICE_E_INVALID_ARG;
 	}
-
-	if (connection->type == CONNECTION_USBMUXD) {
-		int res = usbmuxd_send((int)(long)connection->data, data, len, sent_bytes);
-		if (res < 0) {
-			debug_info("ERROR: usbmuxd_send returned %d (%s)", res, strerror(-res));
-			return IDEVICE_E_UNKNOWN_ERROR;
-		}
-		return IDEVICE_E_SUCCESS;
-	} else {
-		debug_info("Unknown connection type %d", connection->type);
-	}
-	return IDEVICE_E_UNKNOWN_ERROR;
-
+	return connection->proto->send(connection, data, len, sent_bytes);
 }
 
 idevice_error_t idevice_connection_send(idevice_connection_t connection, const char *data, uint32_t len, uint32_t *sent_bytes)
@@ -352,18 +302,7 @@ static idevice_error_t internal_connection_receive_timeout(idevice_connection_t 
 	if (!connection) {
 		return IDEVICE_E_INVALID_ARG;
 	}
-
-	if (connection->type == CONNECTION_USBMUXD) {
-		int res = usbmuxd_recv_timeout((int)(long)connection->data, data, len, recv_bytes, timeout);
-		if (res < 0) {
-			debug_info("ERROR: usbmuxd_recv_timeout returned %d (%s)", res, strerror(-res));
-			return IDEVICE_E_UNKNOWN_ERROR;
-		}
-		return IDEVICE_E_SUCCESS;
-	} else {
-		debug_info("Unknown connection type %d", connection->type);
-	}
-	return IDEVICE_E_UNKNOWN_ERROR;
+	return connection->proto->receive_timeout(connection, data, len, recv_bytes, timeout);
 }
 
 idevice_error_t idevice_connection_receive_timeout(idevice_connection_t connection, char *data, uint32_t len, uint32_t *recv_bytes, unsigned int timeout)
@@ -405,19 +344,7 @@ static idevice_error_t internal_connection_receive(idevice_connection_t connecti
 	if (!connection) {
 		return IDEVICE_E_INVALID_ARG;
 	}
-
-	if (connection->type == CONNECTION_USBMUXD) {
-		int res = usbmuxd_recv((int)(long)connection->data, data, len, recv_bytes);
-		if (res < 0) {
-			debug_info("ERROR: usbmuxd_recv returned %d (%s)", res, strerror(-res));
-			return IDEVICE_E_UNKNOWN_ERROR;
-		}
-
-		return IDEVICE_E_SUCCESS;
-	} else {
-		debug_info("Unknown connection type %d", connection->type);
-	}
-	return IDEVICE_E_UNKNOWN_ERROR;
+	return connection->proto->receive(connection, data, len, recv_bytes);
 }
 
 idevice_error_t idevice_connection_receive(idevice_connection_t connection, char *data, uint32_t len, uint32_t *recv_bytes)
@@ -447,23 +374,21 @@ idevice_error_t idevice_get_handle(idevice_t device, uint32_t *handle)
 {
 	if (!device)
 		return IDEVICE_E_INVALID_ARG;
-
-	if (device->conn_type == CONNECTION_USBMUXD) {
-		*handle = (uint32_t)(long)device->conn_data;
-		return IDEVICE_E_SUCCESS;
-	} else {
-		debug_info("Unknown connection type %d", device->conn_type);
-	}
-	return IDEVICE_E_UNKNOWN_ERROR;
+	return device->proto->get_handle(device, handle);
 }
 
 idevice_error_t idevice_get_udid(idevice_t device, char **udid)
 {
 	if (!device || !udid)
 		return IDEVICE_E_INVALID_ARG;
+	return device->proto->get_udid(device, udid);
+}
 
-	*udid = strdup(device->udid);
-	return IDEVICE_E_SUCCESS;
+static int internal_idevice_get_fd(idevice_connection_t connection)
+{
+	if (!connection)
+		return -1;
+	return connection->proto->get_fd(connection);
 }
 
 #ifndef HAVE_OPENSSL
@@ -656,7 +581,7 @@ idevice_error_t idevice_connection_enable_ssl(idevice_connection_t connection)
 		debug_info("ERROR: Could not create SSL bio.");
 		return ret;
 	}
-	BIO_set_fd(ssl_bio, (int)(long)connection->data, BIO_NOCLOSE);
+	BIO_set_fd(ssl_bio, internal_idevice_get_fd(connection), BIO_NOCLOSE);
 
 	SSL_CTX *ssl_ctx = SSL_CTX_new(SSLv3_method());
 	if (ssl_ctx == NULL) {
