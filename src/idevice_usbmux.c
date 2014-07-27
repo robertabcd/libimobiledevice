@@ -140,12 +140,12 @@ static idevice_error_t idevice_usbmux_get_handle(idevice_t device, uint32_t *han
 	return IDEVICE_E_SUCCESS;
 }
 
-static idevice_error_t idevice_usbmux_get_udid(idevice_t device, char **udid)
+static idevice_error_t idevice_usbmux_get_udid(idevice_t device, const char **udid)
 {
 	struct idevice_usbmux_private *data = (struct idevice_usbmux_private *)device->data;
 	if (!data->udid)
 		return IDEVICE_E_INVALID_ARG;
-	*udid = strdup(data->udid);
+	*udid = data->udid;
 	return IDEVICE_E_SUCCESS;
 }
 

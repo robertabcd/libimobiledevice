@@ -566,7 +566,8 @@ lockdownd_error_t lockdownd_client_new(idevice_t device, lockdownd_client_t *cli
 
 	property_list_service_client_t plistclient = NULL;
 	if (property_list_service_client_new(device, (lockdownd_service_descriptor_t)&service, &plistclient) != PROPERTY_LIST_SERVICE_E_SUCCESS) {
-		debug_info("could not connect to lockdownd (device %s)", device->udid);
+		const char *udid = idevice_get_udid_const(device);
+		debug_info("could not connect to lockdownd (device %s)", udid ? udid : "NO UDID");
 		return LOCKDOWN_E_MUX_ERROR;
 	}
 

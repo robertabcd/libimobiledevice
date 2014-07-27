@@ -41,11 +41,13 @@ enum connection_type {
 	CONNECTION_USBMUXD = 1
 };
 
+const char *idevice_get_udid_const(idevice_t device);
+
 struct idevice_proto {
 	idevice_error_t (*connect)(idevice_t device, uint16_t port, idevice_connection_t *connection);
 	idevice_error_t (*free)(idevice_t device);
 	idevice_error_t (*get_handle)(idevice_t device, uint32_t *handle);
-	idevice_error_t (*get_udid)(idevice_t device, char **udid);
+	idevice_error_t (*get_udid)(idevice_t device, const char **udid);
 };
 
 struct idevice_connection_proto {

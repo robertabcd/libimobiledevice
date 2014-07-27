@@ -377,11 +377,25 @@ idevice_error_t idevice_get_handle(idevice_t device, uint32_t *handle)
 	return device->proto->get_handle(device, handle);
 }
 
+const char *idevice_get_udid_const(idevice_t device)
+{
+	if (!device)
+		return NULL;
+
+	const char *cudid;
+	return IDEVICE_E_SUCCESS == device->proto->get_udid(device, &cudid) ? cudid : NULL;
+}
+
 idevice_error_t idevice_get_udid(idevice_t device, char **udid)
 {
 	if (!device || !udid)
 		return IDEVICE_E_INVALID_ARG;
-	return device->proto->get_udid(device, udid);
+
+	const char *cudid;
+	idevice_error_t ret = device->proto->get_udid(device, &cudid);
+	if (ret == IDEVICE_E_SUCCESS)
+		*udid = strdup(cudid);
+	return ret;
 }
 
 static int internal_idevice_get_fd(idevice_connection_t connection)

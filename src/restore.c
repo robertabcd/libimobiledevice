@@ -305,7 +305,8 @@ restored_error_t restored_client_new(idevice_t device, restored_client_t *client
 
 	property_list_service_client_t plistclient = NULL;
 	if (property_list_service_client_new(device, (lockdownd_service_descriptor_t)&service, &plistclient) != PROPERTY_LIST_SERVICE_E_SUCCESS) {
-		debug_info("could not connect to restored (device %s)", device->udid);
+		const char *udid = idevice_get_udid_const(device);
+		debug_info("could not connect to restored (device %s)", udid ? udid : "NO UDID");
 		return RESTORE_E_MUX_ERROR;
 	}
 
